@@ -5,6 +5,10 @@ environment (loading a local `.env` if present), constructs one adapter per port
 injects them into the `Pipeline`, runs it, and maps our domain errors onto clean
 messages and exit codes.
 
+The summary runs through the Claude Code CLI on your Max/Pro subscription (no Anthropic
+API key); transcription uses Groq. To swap either provider, change the one line that
+names its adapter — nothing else moves.
+
 Design notes:
 - Progress and errors go to **stderr**; the resulting file path is the only thing on
   **stdout**, so `parse <url>` composes in a shell (e.g. `open "$(parse <url>)"`).
@@ -17,11 +21,11 @@ from pathlib import Path
 import typer
 from dotenv import load_dotenv
 
+from .cli_summarizer import ClaudeCliSummarizer
 from .config import Settings
 from .errors import ParserError
 from .fetcher import YtDlpFetcher
 from .pipeline import Pipeline
-from .summarizer import ClaudeSummarizer
 from .transcriber import GroqTranscriber
 from .writer import MarkdownWriter
 
@@ -42,7 +46,7 @@ def parse(
     ),
     model: Optional[str] = typer.Option(
         None, "--model", "-m",
-        help="Anthropic model for the summary (default: claude-opus-4-8 or $RMP_MODEL).",
+        help="Claude Code model for the summary: opus, sonnet, or haiku (default: opus).",
     ),
 ) -> None:
     """Fetch a video's audio, transcribe it, and write a Markdown brief."""
@@ -57,11 +61,8 @@ def parse(
     pipeline = Pipeline(
         fetcher=YtDlpFetcher(),
         transcriber=GroqTranscriber(settings.groq_api_key),
-        summarizer=ClaudeSummarizer(
-            settings.anthropic_api_key,
-            model=model or settings.model,
-            effort=settings.effort,
-        ),
+        # Summary via the Claude Code CLI on your subscription — no Anthropic API key.
+        summarizer=ClaudeCliSummarizer(model=model or "opus"),
         writer=MarkdownWriter(output_dir or settings.output_dir),
     )
 
