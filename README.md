@@ -1,25 +1,44 @@
 # raw-media-parser
 
-`raw-media-parser` is a pipeline for turning raw, non-text video media (such as `.mp4`, `.mov`, and short-form video clips) into structured, LLM-consumable context. It ingests source video, isolates the useful visual and audio signals, and produces structured output that language models can reason over directly.
+## What it is
 
-## What this project aims to do
+Turn a video **URL** into a concise **Markdown brief** of what's said in it.
 
-- Ingest raw media files
-- Separate useful visual and audio signals
-- Structure extracted context into LLM-friendly outputs
+Pass a link (YouTube, TikTok, Instagram, X) and it downloads the audio, transcribes it,
+and summarizes the key information with Claude into a `.md` file:
 
-## Supported media (initial scope)
+```
+URL ─▶ download audio (yt-dlp) ─▶ transcribe (Groq) ─▶ summarize (Claude) ─▶ output/<title>.md
+```
 
-- `.mp4`
-- `.mov`
-- short-form video content
+Claude has no audio input, so transcription uses Groq; Claude only handles the text summary.
 
-## Current scope
+## Setup
 
-This repository is in an early, pre-implementation stage:
+Each person sets this up on their own machine — no secrets are shared or committed.
 
-- No media ingestion, extraction, or structuring code has been written yet.
-- The repository currently contains only project documentation (this README) and repository automation (a GitHub Actions workflow that enables `@claude` mentions on issues and PRs).
-- Architecture, language, and tooling choices have not been finalized.
+### 1. Prerequisites
+- **Python 3.11+**
+- **[uv](https://docs.astral.sh/uv/)** — `brew install uv`
+- **ffmpeg** (yt-dlp needs it to extract audio) — `brew install ffmpeg`
+- **A free Groq API key** — create one at <https://console.groq.com/keys>
+- **Claude Code, logged in on a Max/Pro subscription** — the summary runs on *your*
+  subscription, so there's **no Anthropic API key** and no per-token bill. Install from
+  <https://claude.com/claude-code>.
 
-This README will evolve as implementation details, usage, and examples are added.
+### 2. Install
+```bash
+uv venv
+uv pip install -e ".[dev]"
+
+cp .env.example .env        # then open .env and set GROQ_API_KEY=...
+
+claude                      # run once and complete /login on your Max/Pro plan
+```
+
+### 3. Run
+```bash
+.venv/bin/parse "https://www.youtube.com/watch?v=…"
+```
+Writes a `.md` to `./output/` and prints its path.
+Options: `-o <dir>` (output directory) · `-m opus|sonnet|haiku` (summary model, default `opus`).
