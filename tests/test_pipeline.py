@@ -12,7 +12,7 @@ from pathlib import Path
 from conftest import FakeFetcher, FakeSummarizer, FakeTranscriber, RecordingWriter
 
 from raw_media_parser.models import MediaMetadata
-from raw_media_parser.pipeline import Pipeline
+from raw_media_parser.pipeline import STAGES, Pipeline
 
 
 def _meta() -> MediaMetadata:
@@ -36,7 +36,12 @@ def test_pipeline_runs_stages_in_order_and_hands_off_data() -> None:
     assert "Test Video" in writer.markdown
     assert "the spoken words" in writer.markdown
     assert writer.metadata is not None and writer.metadata.title == "Test Video"
-    assert str(result).endswith("fake.md")
+    assert str(result.path).endswith("fake.md")
+
+    # The run now hands back the brief and the transcript, not just the path.
+    assert result.markdown == writer.markdown
+    assert result.transcript.text == "the spoken words"
+    assert result.metadata.title == "Test Video"
 
 
 def test_pipeline_passes_mode_through() -> None:
@@ -59,3 +64,22 @@ def test_pipeline_cleans_up_temp_audio() -> None:
     # directory (and the audio in it) must be gone.
     assert transcriber.seen_path is not None
     assert not transcriber.seen_path.exists()
+
+
+def test_pipeline_reports_each_stage_in_order() -> None:
+    """`on_stage` drives the web UI's progress display, so order matters."""
+    seen: list[str] = []
+    Pipeline(
+        FakeFetcher(_meta()), FakeTranscriber(), FakeSummarizer(), RecordingWriter()
+    ).run("u", on_stage=seen.append)
+
+    assert seen == list(STAGES)
+
+
+def test_pipeline_runs_without_a_stage_callback() -> None:
+    """Omitting `on_stage` must keep the plain synchronous behaviour."""
+    result = Pipeline(
+        FakeFetcher(_meta()), FakeTranscriber(), FakeSummarizer(), RecordingWriter()
+    ).run("u")
+
+    assert result.path is not None
