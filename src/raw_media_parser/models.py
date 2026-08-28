@@ -30,3 +30,19 @@ class Transcript:
     """The spoken text of the audio."""
 
     text: str
+
+
+@dataclass(frozen=True)
+class ParseResult:
+    """Everything one pipeline run produced.
+
+    The pipeline used to return just the output path, which was all the CLI
+    needed. The web surface also wants to *show* the brief and the transcript
+    without re-reading the file, so the run now hands back the whole set. The
+    transcript in particular was previously discarded as an intermediate.
+    """
+
+    path: Path
+    markdown: str
+    transcript: Transcript
+    metadata: MediaMetadata

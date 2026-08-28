@@ -12,6 +12,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from raw_media_parser import cli as cli_module
+from raw_media_parser.models import MediaMetadata, ParseResult, Transcript
 
 runner = CliRunner()
 
@@ -38,8 +39,15 @@ def test_success_prints_output_path(monkeypatch, tmp_path) -> None:
         def __init__(self, **kwargs):
             pass
 
-        def run(self, url, mode="brief"):
-            return out_file
+        def run(self, url, mode="brief", on_stage=None):
+            if on_stage is not None:
+                on_stage("fetch")
+            return ParseResult(
+                path=out_file,
+                markdown="# out",
+                transcript=Transcript(text="words"),
+                metadata=MediaMetadata(title="t", url=url),
+            )
 
     monkeypatch.setattr(cli_module, "Pipeline", FakePipeline)
 

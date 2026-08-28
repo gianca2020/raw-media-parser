@@ -67,11 +67,15 @@ def parse(
     )
 
     typer.secho(f"Processing {url} …", fg=typer.colors.CYAN, err=True)
+
+    def show_stage(stage: str) -> None:
+        typer.secho(f"  … {stage}", fg=typer.colors.BLUE, err=True)
+
     try:
-        result = pipeline.run(url)
+        result = pipeline.run(url, on_stage=show_stage)
     except ParserError as exc:
         typer.secho(f"{type(exc).__name__}: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
 
-    typer.secho(f"✓ wrote {result}", fg=typer.colors.GREEN, err=True)
-    typer.echo(str(result))  # stdout = the path, so the command is pipeable
+    typer.secho(f"✓ wrote {result.path}", fg=typer.colors.GREEN, err=True)
+    typer.echo(str(result.path))  # stdout = the path, so the command is pipeable
