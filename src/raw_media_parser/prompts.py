@@ -30,6 +30,7 @@ If there are none, omit this section entirely (heading included).
 Rules:
 - Do not invent a title or restate the video's metadata — the caller adds a header.
 - Stay faithful to the transcript; never speculate beyond what was said.
+- Exclude promotional and call-to-action content entirely. It is audience-acquisition material, not information about the subject: subscribe/follow/like prompts, community invites (Telegram, Discord, Slack, newsletters), funding appeals (Patreon, Ko-fi, memberships), merch, courses, discount or affiliate codes, "link in bio", and sponsor reads. Omit it even when the speaker states it plainly — the brief reports what the video was *about*, not how to support it. A reference to the creator's own other work counts as a resource only when it carries substance ("I derive this in my video on backprop"), not when it is a bare plug.
 - Keep it tight: a reader should grasp the whole video in under a minute.
 """
 
