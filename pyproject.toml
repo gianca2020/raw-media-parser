@@ -26,3 +26,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Put src/ on the import path so the suite runs straight from a clone, with no
+# install step -- `pytest` works after `pip install -r requirements-dev.txt`.
+pythonpath = ["src"]
