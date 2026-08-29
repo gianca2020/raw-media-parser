@@ -15,6 +15,7 @@ Two design points worth calling out:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from yt_dlp import YoutubeDL
@@ -40,6 +41,52 @@ def _metadata_from_info(info: dict, fallback_url: str) -> MediaMetadata:
         duration=info.get("duration"),
         upload_date=info.get("upload_date"),  # "YYYYMMDD"
     )
+
+
+# yt-dlp appends the same advice to every extractor failure: file a bug upstream
+# and update the tool. For the common case of "this post is a photo" both are wrong,
+# and relaying them sends the user chasing a defect that does not exist.
+_UPSTREAM_NOISE = re.compile(
+    r"[;.]?\s*please report this issue.*$|[;.]?\s*Confirm you are on the latest version.*$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+# The failure we can explain better than yt-dlp does.
+_NO_FORMATS = re.compile(r"no video formats found", re.IGNORECASE)
+
+
+def _strip_upstream_noise(message: str) -> str:
+    """Drop yt-dlp's 'report this upstream / update your tool' boilerplate."""
+    return _UPSTREAM_NOISE.sub("", message).strip().rstrip(";,")
+
+
+def _ensure_has_media(info: dict, url: str) -> None:
+    """Raise a clear `FetchError` when the URL holds nothing we can transcribe.
+
+    Instagram `/p/` links may be a photo or an image carousel, and a carousel comes
+    back as a playlist whose entries all have zero formats. yt-dlp reports that as
+    "No video formats found!" plus a request to file a bug — accurate about the
+    symptom, actively misleading about the cause. We detect the shape ourselves so
+    the message can say what is actually true: there is no video in this post.
+    """
+    entries = info.get("entries")
+    if entries is not None:
+        entries = [entry for entry in entries if entry]
+        if not entries:
+            raise FetchError(f"no media found at {url}")
+        if not any(entry.get("formats") for entry in entries):
+            raise FetchError(
+                f"{url} is a {len(entries)}-item post with no video in it "
+                "(an image or image carousel), so there is no audio to transcribe. "
+                "Instagram /p/ links may be photos; /reel/ links are always video."
+            )
+        return
+
+    if not info.get("formats") and not info.get("url"):
+        raise FetchError(
+            f"{url} has no video or audio track, so there is nothing to transcribe."
+        )
 
 
 def _resolve_audio_path(info: dict, dest_dir: Path) -> Path:
@@ -91,17 +138,42 @@ class YtDlpFetcher:
             "postprocessor_args": ["-ac", "1", "-ar", str(self._sample_rate)],
         }
 
+    def _probe(self, url: str) -> dict | None:
+        """Metadata-only extract used to explain a failure. None if it also fails."""
+        options = {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            # Only honoured when not downloading — which is the point of the probe.
+            "ignore_no_formats_error": True,
+        }
+        try:
+            with YoutubeDL(options) as ydl:
+                return ydl.extract_info(url, download=False)
+        except Exception:  # best-effort: never mask the original failure
+            return None
+
     def fetch(self, url: str, dest_dir: Path) -> AudioArtifact:
         try:
             with YoutubeDL(self._options(dest_dir)) as ydl:
                 info = ydl.extract_info(url, download=True)
         except DownloadError as exc:
             # Unsupported site, private/removed video, geo-block, network error, …
-            raise FetchError(f"could not download audio for {url}: {exc}") from exc
+            reason = _strip_upstream_noise(str(exc))
+            if _NO_FORMATS.search(reason):
+                # yt-dlp only tolerates the no-formats case when it is not
+                # downloading, so re-extract metadata alone to learn the real
+                # shape (photo? 7-image carousel?) and say so. This costs an
+                # extra request, but only on a request that has already failed.
+                probe = self._probe(url)
+                if probe is not None:
+                    _ensure_has_media(probe, url)  # raises the precise message
+            raise FetchError(f"could not download audio for {url}: {reason}") from exc
 
         if info is None:
             raise FetchError(f"no media found at {url}")
 
+        _ensure_has_media(info, url)
         audio_path = _resolve_audio_path(info, dest_dir)
         metadata = _metadata_from_info(info, fallback_url=url)
         return AudioArtifact(path=audio_path, metadata=metadata)
